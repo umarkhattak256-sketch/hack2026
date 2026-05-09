@@ -16,6 +16,7 @@ frontend-old2/
 backend/config/database.php
 backend-old/config/database.php
 backend-old2/config/database.php
+frontend/database.php
 
 # Uploads (user-generated content)
 backend/uploads/
