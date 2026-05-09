@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+frontend-old/node_modules/
+frontend-old2/node_modules/
+
+# Build output
+frontend/dist/
+frontend-old/
+frontend-old2/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+backend/config/database.php
+backend-old/config/database.php
+backend-old2/config/database.php
+
+# Uploads (user-generated content)
+backend/uploads/
+backend-old/
+backend-old2/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Logs
+*.log
+
+
