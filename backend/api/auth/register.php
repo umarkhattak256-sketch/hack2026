@@ -18,7 +18,7 @@ $email = $data['email'];
 $password = password_hash($data['password'], PASSWORD_BCRYPT);
 $role = $data['role'];
 
-if(!in_array($role, ['donor', 'ngo', 'admin'])) {
+if(!in_array($role, ['member', 'captain', 'admin'])) {
     echo json_encode(['success' => false, 'message' => 'Invalid role']);
     exit;
 }

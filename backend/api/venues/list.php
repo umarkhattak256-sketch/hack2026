@@ -46,7 +46,7 @@ if ($nearLat !== null && $nearLng !== null && $radiusKm !== null && $radiusKm > 
 }
 
 $sql = "SELECT id, name, sport, address, city, lat, lng, price_per_hour, currency, features
-        FROM venues WHERE " . implode(' AND ', $where) . " ORDER BY name ASC LIMIT $limit";
+        FROM venues WHERE " . implode(' AND ', $where) . " ORDER BY name ASC, id ASC LIMIT $limit";
 $stmt = $db->prepare($sql);
 if ($types !== '') {
     $stmt->bind_param($types, ...$params);
@@ -55,7 +55,14 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 $venues = [];
+$seenVenueKeys = [];
 while ($row = $result->fetch_assoc()) {
+    $venueKey = strtolower(trim($row['name']) . '|' . trim($row['sport']) . '|' . trim($row['address'] ?? '') . '|' . trim($row['city'] ?? ''));
+    if (isset($seenVenueKeys[$venueKey])) {
+        continue;
+    }
+    $seenVenueKeys[$venueKey] = true;
+
     $features = $row['features'] ? json_decode($row['features'], true) : [];
     $distanceKm = null;
     if ($nearLat !== null && $nearLng !== null && $row['lat'] !== null && $row['lng'] !== null) {

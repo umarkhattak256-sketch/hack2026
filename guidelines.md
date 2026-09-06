@@ -13,4 +13,4 @@ Tailwind for layout/spacing; keep the existing CSS-variable design tokens in ind
 Database:
 One SQL migration per phase: /backend/migrations/0XX_<name>.sql. Each is idempotent (CREATE TABLE IF NOT EXISTS, ALTER ... ADD COLUMN IF NOT EXISTS via stored proc shim).
 Stop creating tables on the fly inside endpoints — endpoints assume the schema exists.
-Don't touch ngos, donations, milestones (legacy, but DB-safe to leave).
+Legacy fundraising endpoints are not part of ShowUp2Move. Keep future schema changes explicit in migrations.

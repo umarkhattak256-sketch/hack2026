@@ -21,7 +21,7 @@ export function useActivePoll(userId) {
       })
       setPoll(detail.data?.poll || null)
     } catch (err) {
-      setError('Could not load active poll')
+      setError(err?.response?.data?.message || 'Could not load active poll')
     } finally {
       setLoading(false)
     }
@@ -46,11 +46,14 @@ export function useActivePoll(userId) {
       return { ...prev, options, total_votes: total, my_vote_option: optionId }
     })
     try {
-      await api.post('/venues/vote.php', { user_id: userId, poll_id: poll.id, option_id: optionId })
+      const response = await api.post('/venues/vote.php', { user_id: userId, poll_id: poll.id, option_id: optionId })
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Could not save vote')
+      }
       await load()
     } catch (err) {
       setPoll(previous)
-      setError('Could not save vote')
+      setError(err?.response?.data?.message || err?.message || 'Could not save vote')
     }
   }, [poll, userId, load])
 

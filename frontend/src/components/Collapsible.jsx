@@ -20,21 +20,31 @@ export default function Collapsible({
 
   return (
     <div className={`collapsible ${open ? 'open' : ''}`}>
-      <button
-        type="button"
-        className="collapsible-header"
-        onClick={toggle}
-        aria-expanded={open}
-      >
-        <div>
-          <strong>{title}</strong>
-          {help && <div className="help mt-1">{help}</div>}
-        </div>
-        <div className="row gap-sm">
+      <div className="collapsible-header">
+        <button
+          type="button"
+          className="collapsible-toggle"
+          onClick={toggle}
+          aria-expanded={open}
+        >
+          <div>
+            <strong>{title}</strong>
+            {help && <div className="help mt-1">{help}</div>}
+          </div>
+        </button>
+        <div className="collapsible-actions">
           {right}
-          <span className="chevron" aria-hidden>▾</span>
+          <button
+            type="button"
+            className="collapsible-chevron"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-label={open ? 'Collapse section' : 'Expand section'}
+          >
+            <span className="chevron" aria-hidden>v</span>
+          </button>
         </div>
-      </button>
+      </div>
       <div className="collapsible-body">
         <div>
           {open && <div className="collapsible-content">{children}</div>}

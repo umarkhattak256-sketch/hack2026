@@ -15,6 +15,12 @@ export default function AppShell({
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [mounted, setMounted] = useState(false)
+  const roleLabels = {
+    member: 'Member',
+    captain: 'Captain',
+    admin: 'Admin',
+  }
+  const displayedRole = roleLabels[user?.role] || role
 
   useEffect(() => {
     setMounted(true)
@@ -66,7 +72,7 @@ export default function AppShell({
             </div>
             <div className="sidebar-user-meta">
               <strong>{user?.name || 'You'}</strong>
-              <span>{user?.role || role.toLowerCase()}</span>
+              <span>{displayedRole}</span>
             </div>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={handleLogout}>

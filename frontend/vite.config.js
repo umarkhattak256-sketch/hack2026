@@ -1,14 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { basename, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const apiUrl = process.env.VITE_API_URL || 'http://localhost/donortrace/backend/api'
+const configDir = dirname(fileURLToPath(import.meta.url))
+const projectFolder = process.env.VITE_XAMPP_PROJECT || basename(resolve(configDir, '..'))
+const backendUrl = `http://localhost/${encodeURIComponent(projectFolder)}/backend`
 
 export default defineConfig({
-  define: {
-    'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
-  },
-
   plugins: [
     react(),
     tailwindcss(),
@@ -18,12 +18,12 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: apiUrl,
+        target: `${backendUrl}/api`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       '/uploads': {
-        target: apiUrl.replace('/api', '') + '/uploads',
+        target: `${backendUrl}/uploads`,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/uploads/, ''),
       },

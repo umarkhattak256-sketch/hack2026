@@ -47,22 +47,42 @@ function ensureVenuesSchema($db) {
         KEY idx_poll (poll_id)
     )");
 
-    $check = $db->query("SELECT COUNT(*) AS total FROM venues");
-    if ($check) {
-        $row = $check->fetch_assoc();
-        if ((int)$row['total'] === 0) {
-            $seed = [
-                ['Central Park Pitch', 'Football', 'Central Park West', 'Islamabad', 33.7294, 73.0931, 24.00, '["floodlights","showers"]'],
-                ['Arena 12', 'Basketball', 'Sector 12', 'Islamabad', 33.6995, 73.0363, 36.00, '["indoor","floodlights"]'],
-                ['Riverside Courts', 'Tennis', 'Riverside Drive', 'Islamabad', 33.7100, 73.0500, 18.00, '["showers"]'],
-                ['School Court', 'Basketball', 'F-7 School', 'Islamabad', 33.7090, 73.0570, 0.00, '["outdoor"]'],
-                ['Sunset Padel Club', 'Padel', 'Margalla Hills Road', 'Islamabad', 33.7400, 73.0750, 30.00, '["indoor","showers","floodlights"]'],
-            ];
-            $stmt = $db->prepare("INSERT INTO venues (name, sport, address, city, lat, lng, price_per_hour, currency, features, active) VALUES (?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 1)");
-            foreach ($seed as $v) {
-                $stmt->bind_param("ssssddds", $v[0], $v[1], $v[2], $v[3], $v[4], $v[5], $v[6], $v[7]);
-                $stmt->execute();
-            }
+    $seed = [
+        ['Central Park Pitch', 'Football', 'Central Park West', 'Islamabad', 33.7294, 73.0931, 24.00, '["floodlights","showers"]'],
+        ['F-8 Futsal Arena', 'Football', 'F-8 Markaz', 'Islamabad', 33.7148, 73.0398, 28.00, '["indoor","floodlights","parking"]'],
+        ['Arena 12', 'Basketball', 'Sector 12', 'Islamabad', 33.6995, 73.0363, 36.00, '["indoor","floodlights"]'],
+        ['School Court', 'Basketball', 'F-7 School', 'Islamabad', 33.7090, 73.0570, 0.00, '["outdoor"]'],
+        ['Riverside Courts', 'Tennis', 'Riverside Drive', 'Islamabad', 33.7100, 73.0500, 18.00, '["showers"]'],
+        ['Margalla Tennis Club', 'Tennis', 'F-6 Courts', 'Islamabad', 33.7308, 73.0684, 22.00, '["outdoor","parking"]'],
+        ['Sunset Padel Club', 'Padel', 'Margalla Hills Road', 'Islamabad', 33.7400, 73.0750, 30.00, '["indoor","showers","floodlights"]'],
+        ['Padel House Islamabad', 'Padel', 'G-9 Sports Complex', 'Islamabad', 33.6889, 73.0332, 26.00, '["indoor","parking"]'],
+        ['Community Volleyball Court', 'Volleyball', 'F-9 Park', 'Islamabad', 33.7017, 73.0366, 0.00, '["outdoor","floodlights"]'],
+        ['Sports Hall Volleyball', 'Volleyball', 'G-6 Sports Hall', 'Islamabad', 33.7122, 73.0881, 16.00, '["indoor","showers"]'],
+    ];
+
+    $stmt = $db->prepare("INSERT INTO venues (name, sport, address, city, lat, lng, price_per_hour, currency, features, active)
+        SELECT ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, 1
+        WHERE NOT EXISTS (
+            SELECT 1 FROM venues
+            WHERE name = ? AND sport = ? AND address <=> ? AND city <=> ?
+            LIMIT 1
+        )");
+    if ($stmt) {
+        foreach ($seed as $v) {
+            $name = $v[0];
+            $sport = $v[1];
+            $address = $v[2];
+            $city = $v[3];
+            $lat = $v[4];
+            $lng = $v[5];
+            $price = $v[6];
+            $features = $v[7];
+            $stmt->bind_param(
+                "ssssdddsssss",
+                $name, $sport, $address, $city, $lat, $lng, $price, $features,
+                $name, $sport, $address, $city
+            );
+            $stmt->execute();
         }
     }
 }

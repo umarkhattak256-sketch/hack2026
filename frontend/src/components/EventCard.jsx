@@ -3,6 +3,31 @@ const sportIcon = (name) => {
   return m[name] || '🏆'
 }
 
+const initialsOf = (name) => (name || '?')
+  .split(' ')
+  .map(part => part[0])
+  .join('')
+  .slice(0, 2)
+  .toUpperCase()
+
+function MemberAvatars({ members = [], confirmed, max }) {
+  const shown = members.slice(0, 5)
+  const extra = Math.max(confirmed - shown.length, 0)
+
+  if (shown.length === 0 && extra === 0) return null
+
+  return (
+    <div className="avatar-roster" aria-label={`${confirmed} of ${max} players`}>
+      {shown.map(m => (
+        <span className="roster-avatar" key={m.user_id} title={m.name}>
+          {m.profile_pic_url ? <img src={m.profile_pic_url} alt={m.name} /> : <span>{initialsOf(m.name)}</span>}
+        </span>
+      ))}
+      {extra > 0 && <span className="roster-avatar roster-extra" title={`+${extra} more`}>+{extra}</span>}
+    </div>
+  )
+}
+
 export default function EventCard({ event, busy, onJoin, onLeave, showActions = true }) {
   const remaining = Math.max(event.max_players - event.confirmed, 0)
   const fullPct = Math.min(100, (event.confirmed / event.max_players) * 100)
@@ -32,6 +57,8 @@ export default function EventCard({ event, busy, onJoin, onLeave, showActions = 
       <div className="row text-xs muted gap-sm" style={{ marginTop: 4 }}>
         <span>Captain: <strong style={{ color: 'var(--ink)' }}>{event.captain}</strong></span>
       </div>
+
+      <MemberAvatars members={event.members} confirmed={event.confirmed} max={event.max_players} />
 
       <div className="progress" aria-hidden>
         <span style={{ width: `${fullPct}%` }} />
