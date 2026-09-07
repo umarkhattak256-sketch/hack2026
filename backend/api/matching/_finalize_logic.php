@@ -1,10 +1,17 @@
 <?php
 require_once __DIR__ . '/../../lib/geo.php';
+// BUGFIX: finalize queries the venues table to auto-assign a venue to a new
+// event, but nothing guaranteed that table existed yet (it was only ever
+// created lazily inside api/venues/*.php). If a captain finalized a group
+// before anyone had opened the venues page, this crashed with an uncaught
+// fatal error. Requiring the venues schema helper here fixes it.
+require_once __DIR__ . '/../venues/_schema.php';
 
 // Shared finalize routine. Returns ['success'=>bool, ...].
 // Idempotent: if the group is already event_created, returns the existing event id.
 if (!function_exists('runFinalize')) {
     function runFinalize($db, $groupId) {
+        ensureVenuesSchema($db);
         $groupStmt = $db->prepare("SELECT id, sport, status, captain_user_id, event_id, for_date, time_window, centroid_lat, centroid_lng FROM `groups` WHERE id = ? LIMIT 1");
         $groupStmt->bind_param("i", $groupId);
         $groupStmt->execute();

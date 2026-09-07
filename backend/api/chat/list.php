@@ -1,167 +1,98 @@
 <?php
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/_schema.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
 
-$db = getDB();
+// BUGFIX: this file used to be an exact copy-paste of events/list.php and
+// never touched chat_messages at all — group chat had no way to read
+// messages (only send.php worked). Rewritten to actually serve chat.
 
-$db->query("CREATE TABLE IF NOT EXISTS events (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    title VARCHAR(255) NOT NULL,
-    sport VARCHAR(100) NOT NULL,
-    location VARCHAR(255) NOT NULL,
-    event_time DATETIME NOT NULL,
-    max_players INT NOT NULL DEFAULT 10,
-    base_players INT NOT NULL DEFAULT 0,
-    captain_name VARCHAR(255) NOT NULL DEFAULT 'Captain',
-    status VARCHAR(50) NOT NULL DEFAULT 'open',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)");
-
-$db->query("CREATE TABLE IF NOT EXISTS event_members (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    event_id INT NOT NULL,
-    user_id INT NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'joined',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_event_user (event_id, user_id)
-)");
-
-$seedEvents = [
-    ['5v5 Football', 'Football', 'Central Park Pitch', date('Y-m-d 18:30:00'), 12, 9, 'Maya'],
-    ['Evening Hoops', 'Basketball', 'Arena 12', date('Y-m-d 20:00:00'), 10, 7, 'Arman'],
-    ['Doubles Tennis', 'Tennis', 'Riverside Courts', date('Y-m-d 09:00:00', strtotime('+1 day')), 4, 3, 'Sara'],
-];
-
-$seedStmt = $db->prepare("INSERT INTO events (title, sport, location, event_time, max_players, base_players, captain_name)
-    SELECT ?, ?, ?, ?, ?, ?, ?
-    WHERE NOT EXISTS (
-        SELECT 1 FROM events WHERE title = ? AND sport = ? AND location = ? LIMIT 1
-    )");
-
-foreach ($seedEvents as $event) {
-    $seedStmt->bind_param(
-        "ssssiissss",
-        $event[0],
-        $event[1],
-        $event[2],
-        $event[3],
-        $event[4],
-        $event[5],
-        $event[6],
-        $event[0],
-        $event[1],
-        $event[2]
-    );
-    $seedStmt->execute();
-}
-
+$groupId = isset($_GET['group_id']) ? (int)$_GET['group_id'] : 0;
+$eventId = isset($_GET['event_id']) ? (int)$_GET['event_id'] : 0;
 $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+$sinceId = isset($_GET['since_id']) ? (int)$_GET['since_id'] : 0;
+$limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
 
-// Make sure group_id exists (added in Phase 6).
-$check = $db->query("SHOW COLUMNS FROM events LIKE 'group_id'");
-if ($check && $check->num_rows === 0) {
-    $db->query("ALTER TABLE events ADD COLUMN group_id INT NULL, ADD KEY idx_group_id (group_id)");
+if ($groupId <= 0 && $eventId <= 0) {
+    echo json_encode(['success' => false, 'message' => 'group_id or event_id required']);
+    exit;
 }
 
-$sql = "SELECT
-    e.id,
-    e.title,
-    e.sport,
-    e.location,
-    e.event_time,
-    e.max_players,
-    e.base_players,
-    e.captain_name,
-    e.group_id,
-    COUNT(em.id) AS joined_members,
-    MAX(CASE WHEN em.user_id = ? THEN 1 ELSE 0 END) AS joined_by_user
-FROM events e
-LEFT JOIN event_members em ON em.event_id = e.id AND em.status = 'joined'
-WHERE e.status = 'open'
-AND e.id = (
-    SELECT e2.id
-    FROM events e2
-    LEFT JOIN event_members em2 ON em2.event_id = e2.id AND em2.user_id = ?
-    WHERE e2.status = 'open'
-        AND e2.title = e.title
-        AND e2.sport = e.sport
-        AND e2.location = e.location
-    ORDER BY CASE WHEN em2.id IS NULL THEN 1 ELSE 0 END, e2.id ASC
-    LIMIT 1
-)
-GROUP BY e.id
-ORDER BY e.event_time ASC";
+$db = getDB();
+ensureChatSchema($db);
+
+if ($userId > 0 && !userIsChatMember($db, $userId, $groupId, $eventId)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'You are not a member of this chat']);
+    exit;
+}
+
+$where = [];
+$types = '';
+$params = [];
+
+if ($groupId > 0) {
+    $where[] = 'cm.group_id = ?';
+    $types .= 'i';
+    $params[] = $groupId;
+}
+if ($eventId > 0) {
+    $where[] = 'cm.event_id = ?';
+    $types .= 'i';
+    $params[] = $eventId;
+}
+$whereSql = implode(' OR ', $where);
+
+if ($sinceId > 0) {
+    $whereSql = "($whereSql) AND cm.id > ?";
+    $types .= 'i';
+    $params[] = $sinceId;
+}
+
+$sql = "SELECT cm.id, cm.group_id, cm.event_id, cm.user_id, cm.body, cm.created_at,
+        u.name, sp.profile_pic_url
+    FROM chat_messages cm
+    JOIN users u ON u.id = cm.user_id
+    LEFT JOIN sports_profiles sp ON sp.user_id = cm.user_id
+    WHERE $whereSql
+    ORDER BY cm.id ASC
+    LIMIT $limit";
 
 $stmt = $db->prepare($sql);
-$stmt->bind_param("ii", $userId, $userId);
+if (!empty($types)) {
+    $stmt->bind_param($types, ...$params);
+}
 $stmt->execute();
 $result = $stmt->get_result();
 
-$events = [];
-$eventIds = [];
+$messages = [];
+$lastId = $sinceId;
 while ($row = $result->fetch_assoc()) {
-    $timestamp = strtotime($row['event_time']);
-    $dateLabel = date('Y-m-d', $timestamp) === date('Y-m-d')
-        ? 'Today'
-        : (date('Y-m-d', $timestamp) === date('Y-m-d', strtotime('+1 day')) ? 'Tomorrow' : date('M j', $timestamp));
-
-    $confirmed = (int)$row['base_players'] + (int)$row['joined_members'];
-    $eventId = (int)$row['id'];
-    $eventIds[] = $eventId;
-    $events[$eventId] = [
-        'id' => $eventId,
-        'title' => $row['title'],
-        'sport' => $row['sport'],
-        'time' => $dateLabel . ', ' . date('H:i', $timestamp),
-        'event_time' => $row['event_time'],
-        'place' => $row['location'],
-        'max_players' => (int)$row['max_players'],
-        'confirmed' => min($confirmed, (int)$row['max_players']),
-        'captain' => $row['captain_name'],
-        'joined' => (bool)$row['joined_by_user'],
-        'group_id' => isset($row['group_id']) && $row['group_id'] !== null ? (int)$row['group_id'] : null,
-        'members' => [],
+    $id = (int)$row['id'];
+    $messages[] = [
+        'id' => $id,
+        'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
+        'event_id' => $row['event_id'] !== null ? (int)$row['event_id'] : null,
+        'user_id' => (int)$row['user_id'],
+        'body' => $row['body'],
+        'created_at' => $row['created_at'],
+        'user' => [
+            'id' => (int)$row['user_id'],
+            'name' => $row['name'],
+            'profile_pic_url' => $row['profile_pic_url'],
+        ],
     ];
+    if ($id > $lastId) $lastId = $id;
 }
-
-// Batch-fetch real joined members (with avatar) for every event we're returning,
-// so EventCard can show a roster instead of just a captain name.
-if (count($eventIds) > 0) {
-    $placeholders = implode(',', array_fill(0, count($eventIds), '?'));
-    $types = str_repeat('i', count($eventIds));
-    $memberSql = "SELECT em.event_id, u.id AS user_id, u.name, sp.profile_pic_url
-        FROM event_members em
-        JOIN users u ON u.id = em.user_id
-        LEFT JOIN sports_profiles sp ON sp.user_id = u.id
-        WHERE em.status = 'joined' AND em.event_id IN ($placeholders)
-        ORDER BY em.id ASC";
-    $memberStmt = $db->prepare($memberSql);
-    $memberStmt->bind_param($types, ...$eventIds);
-    $memberStmt->execute();
-    $memberResult = $memberStmt->get_result();
-    while ($m = $memberResult->fetch_assoc()) {
-        $eid = (int)$m['event_id'];
-        if (isset($events[$eid])) {
-            $events[$eid]['members'][] = [
-                'user_id' => (int)$m['user_id'],
-                'name' => $m['name'],
-                'profile_pic_url' => $m['profile_pic_url'],
-            ];
-        }
-    }
-}
-
-$events = array_values($events);
-
 
 echo json_encode([
     'success' => true,
-    'events' => $events,
+    'messages' => $messages,
+    'last_id' => $lastId,
 ]);
 
 $db->close();
-?>
