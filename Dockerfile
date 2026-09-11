@@ -18,6 +18,11 @@ RUN docker-php-ext-install mysqli \
 # (where XAMPP serves .../backend/api/... and the frontend calls /api/...).
 COPY backend/ /var/www/html/api/
 
+# database.php is gitignored (contains local secrets on your own machine)
+# so it never reaches this build. Use the safe, secret-free template
+# instead — real values come from Railway's environment variables.
+RUN cp /var/www/html/api/config/database.production.php /var/www/html/api/config/database.php
+
 # Built frontend static files go at the web root.
 COPY --from=frontend-build /app/dist/ /var/www/html/
 
