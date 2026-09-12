@@ -7,14 +7,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-$userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
+// BUGFIX: this file used to be an exact copy-paste of events/list.php and
+// never touched chat_messages at all — group chat had no way to read
+// messages (only send.php worked). Rewritten to actually serve chat.
+
 $groupId = isset($_GET['group_id']) ? (int)$_GET['group_id'] : 0;
 $eventId = isset($_GET['event_id']) ? (int)$_GET['event_id'] : 0;
+$userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
 $sinceId = isset($_GET['since_id']) ? (int)$_GET['since_id'] : 0;
 $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
 
 if ($groupId <= 0 && $eventId <= 0) {
-    http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'group_id or event_id required']);
     exit;
 }
@@ -22,45 +25,54 @@ if ($groupId <= 0 && $eventId <= 0) {
 $db = getDB();
 ensureChatSchema($db);
 
-// If a user_id is supplied, verify membership. We don't *require* user_id on this
-// endpoint to keep things flexible during the prototype, but if they pass one we
-// honor it as an authorization check.
 if ($userId > 0 && !userIsChatMember($db, $userId, $groupId, $eventId)) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'You are not a member of this chat']);
     exit;
 }
 
+$where = [];
+$types = '';
+$params = [];
+
 if ($groupId > 0) {
-    $sql = "SELECT cm.id, cm.group_id, cm.event_id, cm.user_id, cm.body, cm.created_at,
-            u.name, sp.profile_pic_url
-        FROM chat_messages cm
-        JOIN users u ON u.id = cm.user_id
-        LEFT JOIN sports_profiles sp ON sp.user_id = cm.user_id
-        WHERE cm.group_id = ? AND cm.id > ?
-        ORDER BY cm.id ASC LIMIT $limit";
-    $stmt = $db->prepare($sql);
-    $stmt->bind_param("ii", $groupId, $sinceId);
-} else {
-    $sql = "SELECT cm.id, cm.group_id, cm.event_id, cm.user_id, cm.body, cm.created_at,
-            u.name, sp.profile_pic_url
-        FROM chat_messages cm
-        JOIN users u ON u.id = cm.user_id
-        LEFT JOIN sports_profiles sp ON sp.user_id = cm.user_id
-        WHERE cm.event_id = ? AND cm.id > ?
-        ORDER BY cm.id ASC LIMIT $limit";
-    $stmt = $db->prepare($sql);
-    $stmt->bind_param("ii", $eventId, $sinceId);
+    $where[] = 'cm.group_id = ?';
+    $types .= 'i';
+    $params[] = $groupId;
+}
+if ($eventId > 0) {
+    $where[] = 'cm.event_id = ?';
+    $types .= 'i';
+    $params[] = $eventId;
+}
+$whereSql = implode(' OR ', $where);
+
+if ($sinceId > 0) {
+    $whereSql = "($whereSql) AND cm.id > ?";
+    $types .= 'i';
+    $params[] = $sinceId;
 }
 
+$sql = "SELECT cm.id, cm.group_id, cm.event_id, cm.user_id, cm.body, cm.created_at,
+        u.name, sp.profile_pic_url
+    FROM chat_messages cm
+    JOIN users u ON u.id = cm.user_id
+    LEFT JOIN sports_profiles sp ON sp.user_id = cm.user_id
+    WHERE $whereSql
+    ORDER BY cm.id ASC
+    LIMIT $limit";
+
+$stmt = $db->prepare($sql);
+if (!empty($types)) {
+    $stmt->bind_param($types, ...$params);
+}
 $stmt->execute();
-$res = $stmt->get_result();
+$result = $stmt->get_result();
 
 $messages = [];
 $lastId = $sinceId;
-while ($row = $res->fetch_assoc()) {
+while ($row = $result->fetch_assoc()) {
     $id = (int)$row['id'];
-    if ($id > $lastId) $lastId = $id;
     $messages[] = [
         'id' => $id,
         'group_id' => $row['group_id'] !== null ? (int)$row['group_id'] : null,
@@ -74,13 +86,13 @@ while ($row = $res->fetch_assoc()) {
             'profile_pic_url' => $row['profile_pic_url'],
         ],
     ];
+    if ($id > $lastId) $lastId = $id;
 }
 
 echo json_encode([
     'success' => true,
     'messages' => $messages,
     'last_id' => $lastId,
-    'count' => count($messages),
 ]);
 
 $db->close();

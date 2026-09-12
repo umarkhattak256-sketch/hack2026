@@ -140,11 +140,14 @@ export default function CaptainDashboard() {
     }
   }
 
-  const venuesForSport = useMemo(() => {
-    const sport = events.find(e => e.id === voteEventId)?.sport
+  const getVenuesForEvent = (eventId) => {
+    const sport = events.find(e => e.id === eventId)?.sport
     if (!sport) return venues
     return venues.filter(v => v.sport === sport || sport === 'Running')
-  }, [venues, events, voteEventId])
+  }
+
+  const voteEvent = useMemo(() => events.find(e => e.id === voteEventId) || null, [events, voteEventId])
+  const venuesForSport = getVenuesForEvent(voteEventId)
 
   const togglePickVenue = (id) => {
     setPickedVenueIds(prev => {
@@ -155,12 +158,27 @@ export default function CaptainDashboard() {
   }
 
   const startVoteFor = (eventId) => {
+    const event = events.find(e => e.id === eventId)
+    const matchingVenues = getVenuesForEvent(eventId)
     setVoteEventId(eventId)
     setPickedVenueIds([])
+    if (matchingVenues.length < 2) {
+      setMessage(`Add at least two active ${event?.sport || 'matching'} venues before starting a vote.`)
+    } else {
+      setMessage('')
+    }
   }
 
   const submitPoll = async () => {
-    if (pickedVenueIds.length < 2 || !voteEventId) return
+    if (!voteEventId) return
+    if (venuesForSport.length < 2) {
+      setMessage('Add at least two matching venues before starting a vote.')
+      return
+    }
+    if (pickedVenueIds.length < 2 || pickedVenueIds.length > 4) {
+      setMessage('Pick between 2 and 4 venues before starting the poll.')
+      return
+    }
     setVoteSaving(true); setMessage('')
     try {
       const r = await api.post('/polls/create.php', {
@@ -377,7 +395,8 @@ export default function CaptainDashboard() {
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={(e) => { e.stopPropagation(); submitPoll() }}
-                    disabled={voteSaving || pickedVenueIds.length < 2 || pickedVenueIds.length > 4}
+                    disabled={voteSaving || pickedVenueIds.length < 2 || pickedVenueIds.length > 4 || venuesForSport.length < 2}
+                    title={venuesForSport.length < 2 ? 'Add at least two matching venues first' : 'Start venue poll'}
                   >
                     {voteSaving && <span className="spinner" aria-hidden />}
                     {voteSaving ? 'Starting…' : `Start poll (${pickedVenueIds.length})`}
@@ -385,6 +404,11 @@ export default function CaptainDashboard() {
                 </div>
               }
             >
+              {venuesForSport.length < 2 && (
+                <div className="notice">
+                  Add at least two active {voteEvent?.sport || 'matching'} venues in the admin venue manager before starting a vote.
+                </div>
+              )}
               <MapView
                 userLocation={captainLocation}
                 markers={venuesForSport

@@ -1,0 +1,7 @@
+RewriteEngine On
+# Leave real API requests alone.
+RewriteCond %{REQUEST_URI} !^/api/
+# Only rewrite requests that aren't an existing real file or folder.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ /index.html [L]

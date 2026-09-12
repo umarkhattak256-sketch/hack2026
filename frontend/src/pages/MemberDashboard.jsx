@@ -64,6 +64,9 @@ export default function MemberDashboard() {
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMessage, setProfileMessage] = useState('')
+  const [aiDetecting, setAiDetecting] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [aiError, setAiError] = useState('')
   const [userLocation, setUserLocation] = useState(null)
   const [nearbyVenues, setNearbyVenues] = useState([])
   const [nearbyLoading, setNearbyLoading] = useState(false)
@@ -118,6 +121,47 @@ export default function MemberDashboard() {
     } finally {
       setProfileLoading(false)
     }
+  }
+
+  const detectSportsFromBio = async () => {
+    const bio = (getValues('bio') || '').trim()
+    if (!bio) {
+      setAiError('Write a bio first, then detect.')
+      return
+    }
+    setAiDetecting(true)
+    setAiError('')
+    setAiSuggestions([])
+    try {
+      const res = await api.post('/profile/ai_detect.php', {
+        user_id: user?.id,
+        bio,
+      })
+      if (res.data.success) {
+        // Only surface sports the user hasn't already added, so the chip
+        // list is always "new things to add" rather than duplicates.
+        const existing = new Set(sportsInterests.map(s => s.sport))
+        const fresh = (res.data.suggestions || []).filter(s => !existing.has(s.sport))
+        setAiSuggestions(fresh)
+        if (fresh.length === 0 && (res.data.suggestions || []).length === 0) {
+          setAiError('No sports confidently detected from that bio — try adding more detail.')
+        }
+      } else {
+        setAiError(res.data.message || 'AI detection failed.')
+      }
+    } catch (e) {
+      setAiError(e?.response?.data?.message || 'Could not reach AI detection service.')
+    } finally {
+      setAiDetecting(false)
+    }
+  }
+
+  const addSuggestedSport = (suggestion) => {
+    setSportsInterests(prev => {
+      if (prev.some(s => s.sport === suggestion.sport)) return prev
+      return [...prev, { sport: suggestion.sport, skill: suggestion.skill, is_primary: prev.length === 0 }]
+    })
+    setAiSuggestions(prev => prev.filter(s => s.sport !== suggestion.sport))
   }
 
   const saveProfile = async () => {
@@ -613,6 +657,32 @@ export default function MemberDashboard() {
             <div className="field">
               <label>Short bio</label>
               <textarea {...register('bio')} placeholder="Two sentences about your playing style." />
+              <div className="row-between" style={{ marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={detectSportsFromBio}
+                  disabled={aiDetecting}
+                >
+                  {aiDetecting ? 'Detecting…' : '🤖 Detect sports from bio'}
+                </button>
+                {aiError ? <span className="text-xs" style={{ color: '#b91c1c' }}>{aiError}</span> : null}
+              </div>
+              {aiSuggestions.length > 0 && (
+                <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {aiSuggestions.map((s) => (
+                    <button
+                      type="button"
+                      key={s.sport}
+                      className="chip"
+                      onClick={() => addSuggestedSport(s)}
+                      title={`AI confidence: ${Math.round(s.confidence * 100)}%`}
+                    >
+                      + Add {s.sport} ({s.skill})
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-grid mt-2">
               <div className="field"><label>Area</label><input {...register('area')} /></div>

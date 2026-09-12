@@ -37,6 +37,32 @@ function ensureMatchingSchema($db) {
         icon VARCHAR(20) NULL
     )");
 
+    // BUGFIX: matching/run.php requires a sport_rules row to know group
+    // size limits, but the seed data only ever got inserted inside
+    // sports/rules.php. If a user's very first action was to run matching
+    // (never having hit the rules endpoint), sport_rules stayed empty and
+    // matching always failed with "No sport rule for X." Seeding it here
+    // too guarantees the defaults always exist before matching runs.
+    $ruleCount = $db->query("SELECT COUNT(*) AS total FROM sport_rules");
+    if ($ruleCount) {
+        $row = $ruleCount->fetch_assoc();
+        if ((int)$row['total'] === 0) {
+            $seed = [
+                ['Football', 10, 14, 90, '⚽'],
+                ['Basketball', 6, 10, 60, '🏀'],
+                ['Tennis', 2, 4, 60, '🎾'],
+                ['Volleyball', 8, 12, 60, '🏐'],
+                ['Padel', 4, 4, 90, '🎾'],
+                ['Running', 2, 20, 45, '🏃'],
+            ];
+            $stmt = $db->prepare("INSERT IGNORE INTO sport_rules (sport, min_players, max_players, default_duration_min, icon) VALUES (?, ?, ?, ?, ?)");
+            foreach ($seed as $r) {
+                $stmt->bind_param("siiis", $r[0], $r[1], $r[2], $r[3], $r[4]);
+                $stmt->execute();
+            }
+        }
+    }
+
     // events table + the group_id column linking back to a finalized group.
     $db->query("CREATE TABLE IF NOT EXISTS events (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -86,6 +112,28 @@ function ensureMatchingSchema($db) {
         UNIQUE KEY uniq_user_sport (user_id, sport),
         KEY idx_user (user_id),
         KEY idx_sport (sport)
+    )");
+
+    // BUGFIX: matching/run.php joins against sports_profiles (for lat/lng),
+    // but this table was only ever created lazily inside the profile/*.php
+    // endpoints. A user who never opened their profile page had no
+    // sports_profiles row/table yet, which crashed matching with an
+    // uncaught fatal error. Ensuring it here guarantees it always exists
+    // before matching runs.
+    $db->query("CREATE TABLE IF NOT EXISTS sports_profiles (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL UNIQUE,
+        bio TEXT,
+        sport VARCHAR(100) NOT NULL DEFAULT 'Football',
+        skill VARCHAR(100) NOT NULL DEFAULT 'Intermediate',
+        area VARCHAR(255) NOT NULL DEFAULT 'Central Park',
+        available TINYINT(1) NOT NULL DEFAULT 1,
+        profile_pic_url VARCHAR(500) NULL,
+        lat DECIMAL(10,7) NULL,
+        lng DECIMAL(10,7) NULL,
+        city VARCHAR(120) NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 }
 

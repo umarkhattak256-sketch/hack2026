@@ -7,7 +7,7 @@ export default function Login() {
   const navigate = useNavigate()
   const { login } = useAuth()
   const [isLogin, setIsLogin] = useState(true)
-  const [role, setRole] = useState('donor')
+  const [role, setRole] = useState('member')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -16,7 +16,7 @@ export default function Login() {
 
   const routeUser = user => {
     if (user.role === 'admin') navigate('/admin')
-    else if (user.role === 'ngo') navigate('/captain')
+    else if (user.role === 'captain') navigate('/captain')
     else navigate('/member')
   }
 
@@ -100,11 +100,11 @@ export default function Login() {
               <div className="field">
                 <label>I am a…</label>
                 <div className="role-grid">
-                  <button type="button" className={`role-pick ${role === 'donor' ? 'active' : ''}`} onClick={() => setRole('donor')}>
+                  <button type="button" className={`role-pick ${role === 'member' ? 'active' : ''}`} onClick={() => setRole('member')}>
                     <strong>Member</strong>
                     <span>I want to join games</span>
                   </button>
-                  <button type="button" className={`role-pick ${role === 'ngo' ? 'active' : ''}`} onClick={() => setRole('ngo')}>
+                  <button type="button" className={`role-pick ${role === 'captain' ? 'active' : ''}`} onClick={() => setRole('captain')}>
                     <strong>Captain</strong>
                     <span>I organize events</span>
                   </button>

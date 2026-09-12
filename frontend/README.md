@@ -108,9 +108,9 @@ sport_rules         Min/max players per sport
 ### Backend Setup
 ```
 1. Start XAMPP — Apache + MySQL
-2. Place backend folder in: C:/xampp/htdocs/donortrace/
+2. Place backend folder in: C:/xampp/htdocs/showup2move/
 3. Open phpMyAdmin: http://localhost/phpmyadmin
-4. Create database called: donortrace
+4. Create database called: showup2move
 5. Import migration SQL files from: /backend/migrations/
 ```
 
