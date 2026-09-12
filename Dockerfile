@@ -14,5 +14,5 @@ RUN npm run build
 # .php execution (only static files respected it).
 FROM serversideup/php:8.2-fpm-apache
 
-COPY --chown=www-data:www-data backend/ /var/www/html/public/api/
+COPY --chown=www-data:www-data backend/ /var/www/html/public/
 COPY --chown=www-data:www-data --from=frontend-build /app/dist/ /var/www/html/public/
